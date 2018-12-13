@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha1"
 	"encoding/hex"
@@ -8,8 +9,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/bradleyfalzon/ghinstallation"
@@ -75,9 +79,6 @@ func webhookHandler(w http.ResponseWriter, r *http.Request) {
 	case "pull_request":
 		// https://developer.github.com/v3/activity/events/types/#pullrequestevent
 		handlePullRequestEvent(w, r)
-	case "issue_comment":
-		// https://developer.github.com/v3/activity/events/types/#issuecommentevent
-		handleIssueCommentEvent(w, r)
 	default:
 		log.Println("unrecognized event:", event)
 		w.WriteHeader(204)
@@ -98,84 +99,199 @@ func handlePullRequestEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	switch *event.Action {
-	case "closed":
-		handleClosedPullRequest(event)
-	case "opened":
-		handleOpenedPullRequest(event)
+	if *event.Action != "closed" {
+		return
 	}
-}
 
-func handleClosedPullRequest(event github.PullRequestEvent) {
-	// TODO: Implement.
-}
-
-func handleOpenedPullRequest(event github.PullRequestEvent) {
 	transport := http.Transport{}
+	// the installation id we get from event is 64 bit, not sure if we should use it as this intallation id
 	itr, err := ghinstallation.New(&transport, appID, installationID, privateKey)
 	if err != nil {
 		log.Println("Unable to create a new transport:", err)
 		return
 	}
-
-	prno, err := parsePullRequestNumber(*event.GetPullRequest().Body)
-	if err != nil {
-		log.Println("Unable to parse pull request number:", err)
-		return
-	}
-
-	if event.Number == nil {
-		log.Println("Expected pull request number. Was nil.")
-		return
-	}
-
-	err = savePullRequestDep(prno, event.GetNumber())
-	if err != nil {
-		log.Println("Unable to save pull request dependency.", err)
-		return
-	}
-
 	client := github.NewClient(&http.Client{Transport: itr})
 
+	if event.Number == nil {
+		log.Println("Unexpected number, nil")
+	}
+
+	pr := newPullRequestFrom(event)
+
+	xRefs, err := listCrossReferences(r.Context, client, event.GetNumber())
+	if err != nil {
+		log.Print("Unable to list cross references:", err)
+		return
+	}
+	for _, xRef := range xRefs {
+		// TODO: Handling the same PR multiple times.
+		if wasReferenced, err := hasPullRequestReference(r.Context(), client, pr); err != nil {
+			log.Println(err)
+			// Not returning here to try to rebase the other dependencies.
+		} else if !wasReferenced {
+			continue
+		}
+		if err := handlePullRequestRebase(itr, client, pr, getPullRequestBase(client)); err != nil {
+			log.Print("can not rebase pull request ", err)
+		}
+	}
 }
 
-func handleIssueCommentEvent(w http.ResponseWriter, r *http.Request) {
-	var event github.IssueCommentEvent
+type pullRequest struct {
+	Owner  string
+	Repo   string
+	Number int
+}
 
-	if err := decodeJSONOrBail(w, r, &event); err != nil {
-		return
+func newPullRequestFrom(e github.PullRequestEvent) pullRequest {
+	return pullRequest{
+		Owner:  e.Repo.Owner.GetName(),
+		Repo:   e.Repo.GetName(),
+		Number: e.GetNumber(),
 	}
+}
 
-	if a := *event.Action; a != "created" {
-		log.Println("Issue comment isn't created. Ignoring. Action:", a)
-		return
-	}
-
-	if *event.Issue.State == "closed" {
-		log.Println("Not reacting to closed issue.")
-		return
-	}
-
-	prno, err := parsePullRequestNumber(*event.Comment.Body)
+func listCrossReferences(ctx context.Context, client *github.Client, pr pullRequest, lo *github.ListOption) ([]*github.Timeline, error) {
+	timelines, _, err := client.Issues.ListIssueTimeline(ctx, pr.Owner, pr.Repo, pr.Number, lo)
 	if err != nil {
-		log.Println("Unable to parse issue number :", err)
-		return
+		log.Print("can not get xRef from event:", err)
+		return nil, err
 	}
 
-	err = savePullRequestDep(prno, event.GetIssue().GetNumber())
-	if err != nil {
-		log.Println("Unable to save issue dependency.", err)
-		return
+	crossReferenceTimelines := nil
+
+	for _, timeline := range timelines {
+		if *timeline.Event != "cross-referenced" {
+			continue
+		}
+		crossReferenceTimelines = append(crossReferenceTimelines, timeline)
 	}
+
+	return crossReferenceTimelines, nil
+}
+
+func hasPullRequestReference(ctx context.Context, client *github.Client, pr pullRequest) (bool, error) {
+	// TODO check if any comment matches the regexp "depends on #" + xRef.Number
+
+	hasReference := false
+	opt := &github.PullRequestListCommentsOptions{
+		Sort: "created",
+	}
+
+	comments, resp, err := client.PullRequests.ListComments(ctx, pr.Owner, pr.Repo, 0, opt)
+	if err != nil {
+		return false, err
+	}
+
+	for _, comment := range comments {
+		//depNumber := strconv.Itoa(int(xRef.Number))
+		//r, _ := regexp.Compile("depends on #" + depNumber)
+
+		//hasReference = r.MatchString(comment.Body)
+	}
+
+	return hasReference, nil
+}
+
+func getPullRequestBase(client *github.Client) string {
+	return client.PullRequests.Base.Ref
+}
+
+func handlePullRequestRebase(itr *ghinstallation.Transport, client *github.Client, pr pullRequest, destBranch string) error {
+	token, err := itr.Token()
+	if err != nil {
+		return err
+	}
+
+	dir, err := checkout(itr, pr)
+	if err != nil {
+		return err
+	}
+	log.Println("Cloned the git repo. Location:", dir)
+	defer os.RemoveAll(dir) // TODO: Log error.
+
+	newBranch, err := rebase(dir, destBranch)
+	if err != nil {
+		return err
+	}
+
+	if err := push(dir, newBranch); err != nil {
+		return err
+	}
+
+	newPR, err := createPullRequest(dir, newBranch, client, pr)
+	if err != nil {
+		return err
+	}
+
+	if err := closePullRequest(client, pr); err != nil {
+		return err
+	}
+
+	// TODO: Really bad name of this function :-) Let's fix that soon.
+	if err := informTheUser(client, pr); err != nil {
+		return err
+	}
+}
+
+func checkout(token string, pr pullRequest) (dir string, err error) {
+	dir = ioutil.TempDir("", "rebbot")
+	err = exec.Command("git", "clone", fmt.Sprintf("https://token:%s@github.com/%s/%s.git", token, pr.Owner, pr.Repo)).Run()
+	return
+}
+
+func rebase(gitRepo, destBranch string, pr pullRequest) (newBranch string, err error) {
+	newBranch = uuid.New().String()
+	err = execInPath(gitRepo, "git", "fetch", "origin", fmt.Sprintf("pull/%s/head:%s", pr.Number, tempBranch))
+	if err != nil {
+		return "", err
+	}
+	err = execInPath(gitRepo, "git", "checkout", tempBranch)
+	if err != nil {
+		return "", err
+	}
+	return "", execInPath(gitRepo, "git", "rebase", destBranch)
+}
+
+func execInPath(dir, cmd string, args ...string) error {
+	c := exec.Command(cmd, args...)
+	c.Dir = dir
+	return c.Run()
+}
+
+func push(gitRepo, newBranch string) error {
+	if err = execInPath(gitRepo, "git", "checkout", newBranch); err != nil {
+		return err
+	}
+	return execInPath(gitRepo, "git", "push", "origin")
+}
+
+func createPullRequest(gitRepo, newBranch string, client *github.Client, pr pullRequest) (pullRequest, error) {
+	s := fmt.Sprintf("A new rebased PR based on #%d", pr.Number)
+	newpr, _, err := client.PullRequests.Create(context.TODO(), pr.Owner, pr.Repo, &github.NewPullRequest{
+		Title: s,
+		Body:  fmt.Sprint("depends on #%d", pr.Number), // TODO: Correct?
+		Base:  "master",                                // TODO: Handle a other destination branches
+		Head:  newBranch,
+	})
+	return newPullRequestFrom(newpr), err
+}
+
+func closePullRequest(client *github.Client, pr pullRequest) error {
+	_, _, err := client.PullRequests.Edit(context.TODO(), pr.Owner, pr.Repo, pr.Number, &github.PullRequest{
+		State: "closed",
+	})
+	return err
+}
+
+func informTheUser(client *github.Client, pr pullRequest) error {
+	_, _, err := client.PullRequests.CreateComment(context.TODO(), pr.Owner, pr.Repo, pr.Number, &github.PullRequestComment{
+		Body: "Closed this as I created a new pull request which is rebased on the latest branch.",
+	})
+	return err
 }
 
 // Utility functions.
-
-func parsePullRequestNumber(s)
-
-func isRelevantRef(ref string) bool {
-	return ref == "refs/heads/staging" || ref == "refs/heads/trying"
-}
 
 func decodeJSONOrBail(w http.ResponseWriter, r *http.Request, m interface{}) error {
 	err := decodeAndValidateJSON(r, &m)
