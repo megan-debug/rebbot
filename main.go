@@ -19,11 +19,38 @@ import (
 var commitStatusContext = "tink/four-eyes"
 
 // The following two fields must be set when creating a new app.
+// Versioned secrets is for "Test Rebbot" Github app, which only
+// is connected to https://github.com/rebbot/test-repo to be used
+// for testing.
 var privateKey = []byte(`-----BEGIN RSA PRIVATE KEY-----
-ABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABCABC
+MIIEowIBAAKCAQEA0BPeSw4SG1brGRB2ejxL/pRtTguiIQsjE+np8zVodcO1tU0j
+peLgbuaPaEyO9Yu2eSaynCRlq1afGzvwPHMHDxXPu29ibd5jAo1aZaeWTC2yogVZ
+IO7ndZodDHQWksQLSgc3GV3TV4n9zaj4s7+XASQa85gVxTBqb1ZadX8/muW2kMmU
+Ay7n99RMAi3lseNZAWbCdWjiDEVp3KlRvb9tLDywYct+ybjf9N25wEUUfgeY9wI4
+DmKseX9r4cJHiYEE+bd+96SjZiMzctzEjavj4JIX3i6wDFg3RTpSi6Hqs3QwtxMt
+eWuwYLf67mFMbolGdhD7dvxiS3f21MObqnF9gwIDAQABAoIBAFCtA2lSYU7cWnbz
+XRxzuHtSjTbPZ+Mr8EPOU/kKYiAW66MJ76Jn3uDg4AVueZdWvj8m8+V6bzkJctMa
+YEDv0HLW4B4qR52VtgnNSJlVav7KURJkxHPybSe5wz2K3R22iTIAripVqJWuWQue
+Uh9PT3sPxqtf8kDsTrgwYQ5hcgXaC1wzFt0SocWPVLY3hdu338Y4m9cUfap3BjxB
+Fl6KOZLMtbnaJOqLlQjM84vu2QXWzTtsUqmyuBYZOgpGz+17AeT8ekU73rXOWPoe
+QHZl53JNV1hV3xUOHdG821XOXp2Jdb5ECHUov5lS7mF99CZ+HzEGtY8ubgjgBVUD
+xn/zqNECgYEA+ycxNkPyKD2R83F/ga1ksKBWNF8N8CnNq8CmrhemtEj112Y3mMaA
+yoyTVOWb+2alRFpGw82WVWoHtfkJgNM+3tO9HpnA2029UPlsVATMI0OQ3Egd0bXs
+o7J/gjDZTtZyaYTrjkj5vktZ731NG+m9hLFMEzo69tD+fM/Q2en/S20CgYEA1Bfd
+NNypJR5AEPp2xvWgiMN4oHeDVlIMijtKCv/lqYDdDqKjkS0QjfAovZ/HkxwudG0V
+QoDwwKLEiha8GU1PZMDIg4fW95ImqurZQG5fqc1Lm7kS1DFp4AWiw8EldCZFGuE3
+XxoG0rCS8LLxwe77Nlej5XUxzUBDDPWkw0kt5q8CgYAiIEQulHLuBtezFYP20eGx
+oke0XAofzP5WTRoY47vSGWvWNdxuFOLhItLOIVjdgygHrqCY8HFx77NWhZ1F9O5B
+BtJWuxuacOi9fPa8P96hGAgx9lae7TJXV+S9gve0H61yKw56ye2tbr2srgDxPwRy
+aEjm/+2NJf6+ZNqDEamPzQKBgQCkcwh6l2mzNRxZzcpRBF0ADgg269PzF1VPzR7h
+Hn91iUxdr6+Bvl5qn78HIJ9/Kke+0GG+mfmSc+JOa8hXGgGoTm5qxeXhOfovZj8j
+XTFhmKO6T6sQymucXuJQRC+FOrM0X1IutCB8NpsIdMdNJr6z6QpUvSTrT5ttrf2d
+yd0EUwKBgEdqsLuu74PwBR/pSk1ts76qhThZv9H2yJ/Ls9zUcPlUOifLZJDCgoaG
+pgoDbPyrul8+jqX/NOG4p33N1Btj1ZDGA8C6CcvhCI0zWydJRA4u6Dg6rSyjvv83
+XveJWmPnDanYTPGhJNegvmg1rNj82zFlJmbJTK9sXQJ5ZO8GbpOS
 -----END RSA PRIVATE KEY-----
 `)
-var hmacSecret = []byte(`ABCABCABC`)
+var hmacSecret = []byte(`C8A40DA0-1E83-43E3-B890-85261B386DAF`)
 
 const integrationID = 22228
 
