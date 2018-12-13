@@ -52,9 +52,9 @@ XveJWmPnDanYTPGhJNegvmg1rNj82zFlJmbJTK9sXQJ5ZO8GbpOS
 `)
 var hmacSecret = []byte(`C8A40DA0-1E83-43E3-B890-85261B386DAF`)
 
-const integrationID = 22228
+const appID = 13053
 
-const installationID = 512935
+const installationID = 199248
 
 func main() {
 	http.HandleFunc("/webhook", webhookHandler)
@@ -112,7 +112,7 @@ func handleClosedPullRequest(event github.PullRequestEvent) {
 
 func handleOpenedPullRequest(event github.PullRequestEvent) {
 	transport := http.Transport{}
-	itr, err := ghinstallation.New(&transport, integrationID, installationID, privateKey)
+	itr, err := ghinstallation.New(&transport, appID, installationID, privateKey)
 	if err != nil {
 		log.Println("Unable to create a new transport:", err)
 		return
