@@ -230,7 +230,7 @@ func hasPullRequestReference(ctx context.Context, client *github.Client, depende
 
 		for _, comment := range comments {
 			log.Println("Checking comment:", *comment.Body)
-			hasReference := strings.Contains(*comment.Body, needle)
+			hasReference := CaseInsensitiveContains(*comment.Body, needle)
 			if hasReference {
 				return true, nil
 			}
@@ -330,7 +330,7 @@ func push(gitRepo, newBranch string) error {
 
 func createPullRequest(gitRepo, newBranch string, client *github.Client, pr pullRequest, prDependee pullRequest) (int, error) {
 	title := fmt.Sprintf("A new PR rebased on #%d", pr.Number)
-	body := fmt.Sprintf("depends on #%d", prDependee.Number)
+	body := fmt.Sprintf("Depends on #%d.", prDependee.Number)
 	base := "master"
 
 	data := &github.NewPullRequest{
@@ -361,6 +361,11 @@ func informTheUser(client *github.Client, pr pullRequest) error {
 }
 
 // Utility functions.
+
+func CaseInsensitiveContains(s, substr string) bool {
+	s, substr = strings.ToUpper(s), strings.ToUpper(substr)
+	return strings.Contains(s, substr)
+}
 
 func decodeJSONOrBail(w http.ResponseWriter, r *http.Request, m interface{}) error {
 	err := decodeAndValidateJSON(r, &m)
