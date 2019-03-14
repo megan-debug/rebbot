@@ -1,7 +1,6 @@
 # Use the latest perl image from dockerhub
 FROM golang:latest
 
-# Instruct mojolicious to listen on port 8080 and open the port
 EXPOSE 8080
 
 # add your application code and set the working directory
