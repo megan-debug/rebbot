@@ -12,6 +12,6 @@ $ go get github.com/rebbot/rebbot
 ```
 should download, compile and install the application.
 
-Team members
-------------
+Authors
+-------
 Jens Rantil, Eve Chen & Michael Palma.
