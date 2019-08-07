@@ -1,8 +1,7 @@
 Rebbot
 ======
 A Github pull-request rebase bot. It automatically rebases one pull request
-once another has been merged. Preferably this is a service we can
-make public outside of Tink, including open sourcing.
+once another has been merged.
 
 How to install
 --------------
