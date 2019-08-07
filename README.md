@@ -10,7 +10,3 @@ How to install
 $ go get github.com/rebbot/rebbot
 ```
 should download, compile and install the application.
-
-Authors
--------
-Jens Rantil, Eve Chen & Michael Palma.
